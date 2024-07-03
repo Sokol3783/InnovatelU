@@ -1,12 +1,13 @@
 package org.example;
 
 import java.time.Instant;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.Builder;
 import lombok.Data;
 
@@ -30,7 +31,22 @@ public class DocumentManager {
    * @return saved document
    */
   public Document save(Document document) {
-    return null;
+    var documentOptional = findById(document.getId());
+
+    if (documentOptional.isPresent()) {
+      throw new RuntimeException("Document with such id is already exists!");
+    }
+
+    if (document.id.isEmpty()) {
+      document.setId(UUID.randomUUID().toString());
+    }
+
+    documents.add(document);
+    return document;
+  }
+
+  private boolean idIsEquals(String id, Document savedDocument) {
+    return savedDocument.id.contentEquals(id);
   }
 
   /**
@@ -40,8 +56,28 @@ public class DocumentManager {
    * @return list matched documents
    */
   public List<Document> search(SearchRequest request) {
+    Stream<Document> documentStream = documents.stream();
 
-    return Collections.emptyList();
+    Optional.ofNullable(request.titlePrefixes).ifPresent(
+        prefixes -> documentStream.filter(document ->
+            prefixes.stream().anyMatch(prefix -> document.title.startsWith(prefix))
+        )
+    );
+
+    Optional.ofNullable(request.containsContents).
+        ifPresent(content -> documentStream.filter(
+            document -> content.stream().anyMatch(value -> document.content.contains(value))));
+
+    Optional.ofNullable(request.authorIds).ifPresent(
+        authorsIds -> documentStream.filter(document -> authorsIds.contains(document.author.id)));
+
+    Optional.ofNullable(request.createdFrom).ifPresent(
+        createdFrom -> documentStream.filter(document -> document.created.isAfter(createdFrom)));
+
+    Optional.ofNullable(request.createdTo).ifPresent(
+        createdTo -> documentStream.filter(document -> document.created.isBefore(createdTo)));
+
+    return documentStream.toList();
   }
 
   /**
@@ -51,8 +87,7 @@ public class DocumentManager {
    * @return optional document
    */
   public Optional<Document> findById(String id) {
-
-    return Optional.empty();
+    return documents.stream().filter(savedDocument -> idIsEquals(id, savedDocument)).findAny();
   }
 
   @Data
